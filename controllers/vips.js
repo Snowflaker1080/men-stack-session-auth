@@ -4,7 +4,7 @@ const router = express.Router();
 // GET /vip-lounge/
 router.get("/", (req, res) => {
   const username = res.locals.user?.username || "Guest";
-  res.render("vip-lounge.ejs", {
+  res.render("auth/vip-lounge.ejs", {
     message: `Welcome to the VIP Lounge, ${username}.`,
   });
 });

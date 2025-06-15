@@ -1,38 +1,39 @@
 const dotenv = require("dotenv");
 dotenv.config();
+
 const express = require("express");
-const app = express();
-
-const authController = require("./controllers/auth.js");
-
 const mongoose = require("mongoose");
 const methodOverride = require("method-override");
-const isSignedIn = require("./middleware/is-signed-in.js");
 const MongoStore = require("connect-mongo");
 const morgan = require("morgan");
-const session = require('express-session');
+const session = require("express-session");
+
+const app = express();
+
+//Middleware
 const passUserToView = require("./middleware/pass-user-to-view.js");
+const isSignedIn = require("./middleware/is-signed-in.js");
+
+//Controllers
+const authController = require("./controllers/auth.js"); // auth router holds all the auth endpoints
 const vipsController = require("./controllers/vips.js");
 
-// Set the port from environment variable or default to 3000
+// Set the port from environment variable or default to 3000 -ternary statement
 const port = process.env.PORT ? process.env.PORT : "3000";
 
+// Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI);
-
 mongoose.connection.on("connected", () => {
   console.log(`Connected to MongoDB ${mongoose.connection.name}.`);
 });
 
+// Core Middleware
 // Middleware to parse URL-encoded data from forms
 app.use(express.urlencoded({ extended: false }));
-
 // Middleware for using HTTP verbs such as PUT or DELETE
 app.use(methodOverride("_method"));
-
 // Morgan for logging HTTP requests
 app.use(morgan("dev"));
-
-app.use('/auth', authController);
 
 app.use(
   session({
@@ -45,47 +46,31 @@ app.use(
   })
 );
 
+// Custom Middleware
 app.use(passUserToView);
 
-app.use(
-  "/vip-lounge",
-  (req, res, next) => {
-    if (req.session.user) {
-      res.locals.user = req.session.user; // Store user info for use in the next function
-      next(); // Proceed to the next middleware or controller
-    } else {
-      res.redirect("/"); // Redirect unauthenticated users
-    }
-  },
-  vipsController // The controller handling the '/vip-lounge' route
-);
+// Mount Controllers
+app.use("/auth", authController);
+app.use("/vip-lounge", isSignedIn, vipsController);
 
-// GET /
+// GET / Home Route
 app.get("/", (req, res) => {
   res.render("index.ejs", {
-   // user: req.session.user, //removing due to passUserToView
+    user: req.session.user,
   });
 });
 
-// GET / "/vip-lounge"
-app.get("/vip-lounge", isSignedIn, (req, res) => {
-  if (req.session.user) {
-    res.send(`Welcome to the party ${req.session.user.username}.`);
-  } else {
-    res.send("Sorry, no guests allowed.");
+// Wildcard
+app.get('/*spat', async (req, res) => {
+  try {
+    console.warn(`Unknown route accessed: ${req.originalUrl}`);
+    res.redirect("/");
+  } catch (err) {
+    console.error("Error handling unknown route:", err);
+    res.status(500).send("Something went wrong. Please try again.");
   }
 });
 
-// app.get("*", (req, res) => {
-//   res.redirect("/");
-// });
-
 app.listen(port, () => {
-  let port;
-  if (process.env.PORT) {
-    port = process.env.PORT;
-  } else {
-    port = 3000;
-  }
   console.log(`The express app is ready on port ${port}!`);
 });
